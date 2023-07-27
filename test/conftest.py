@@ -45,10 +45,10 @@ def ipv6(force_ipv6=True):
     Meant to be used as a context manager to force IPv6 sockets:
 
         with ipv6():
-            nginxproxy.get("http://something.nginx-proxy.local")  # force use of IPv6
+            nginxproxy.get("http://something.nginx-proxy.example")  # force use of IPv6
 
         with ipv6(False):
-            nginxproxy.get("http://something.nginx-proxy.local")  # legacy behavior
+            nginxproxy.get("http://something.nginx-proxy.example")  # legacy behavior
 
 
     """
@@ -160,6 +160,10 @@ def container_ip(container: Container):
         net_info = container.attrs["NetworkSettings"]["Networks"]
         if "bridge" in net_info:
             return net_info["bridge"]["IPAddress"]
+        
+        # container is running in host network mode
+        if "host" in net_info:
+            return "127.0.0.1"
 
         # not default bridge network, fallback on first network defined
         network_name = list(net_info.keys())[0]
@@ -173,6 +177,10 @@ def container_ipv6(container):
     net_info = container.attrs["NetworkSettings"]["Networks"]
     if "bridge" in net_info:
         return net_info["bridge"]["GlobalIPv6Address"]
+    
+    # container is running in host network mode
+    if "host" in net_info:
+        return "::1"
 
     # not default bridge network, fallback on first network defined
     network_name = list(net_info.keys())[0]

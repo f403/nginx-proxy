@@ -67,6 +67,24 @@
     #         {{ .Name }} (ignored)
             {{- continue }}
         {{- end }}
+        {{- if eq .Name "host" }}
+            {{- /* Handle containers in host nework mode */}}
+            {{- if (index $.globals.networks "host") }}
+    #         both container and proxy are in host network mode, using localhost IP
+                {{- $ip = "127.0.0.1" }}
+                {{- continue }}
+            {{- end }}
+            {{- range sortObjectsByKeysAsc $.globals.CurrentContainer.Networks "Name" }}
+                {{- if and . .Gateway }}
+    #         container is in host network mode, using {{ .Name }} gateway IP
+                    {{- $ip = .Gateway }}
+                    {{- break }}
+                {{- end }}
+            {{- end }}
+            {{- if $ip }}
+                {{- continue }}
+            {{- end }}
+        {{- end }}
         {{- if and (not (index $.globals.networks .Name)) (not $.globals.networks.host) }}
     #         {{ .Name }} (unreachable)
             {{- continue }}
@@ -141,7 +159,7 @@
     ssl_prefer_server_ciphers off;
     {{- else if eq .ssl_policy "Mozilla-Intermediate" }}
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305';
     ssl_prefer_server_ciphers off;
     {{- else if eq .ssl_policy "Mozilla-Old" }}
     ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
@@ -415,6 +433,7 @@ proxy_set_header Proxy "";
 server {
     server_name _; # This is just an invalid value which will never trigger on a real hostname.
     server_tokens off;
+    http2 on;
         {{- if $fallback_http }}
     listen {{ $globals.external_http_port }}; {{- /* Do not add `default_server` (see comment above). */}}
                 {{- if $globals.enable_ipv6 }}
@@ -422,9 +441,9 @@ server {
                 {{- end }}
         {{- end }}
         {{- if $fallback_https }}
-    listen {{ $globals.external_https_port }} ssl http2; {{- /* Do not add `default_server` (see comment above). */}}
+    listen {{ $globals.external_https_port }} ssl; {{- /* Do not add `default_server` (see comment above). */}}
             {{- if $globals.enable_ipv6 }}
-    listen [::]:{{ $globals.external_https_port }} ssl http2; {{- /* Do not add `default_server` (see comment above). */}}
+    listen [::]:{{ $globals.external_https_port }} ssl; {{- /* Do not add `default_server` (see comment above). */}}
             {{- end }}
     ssl_session_cache shared:SSL:50m;
     ssl_session_tickets off;
@@ -534,6 +553,7 @@ server {
     {{- if $server_tokens }}
     server_tokens {{ $server_tokens }};
     {{- end }}
+    http2 on;
     {{ $globals.access_log }}
     {{- if or (eq $https_method "nohttps") (not $cert_ok) (eq $https_method "noredirect") }}
     listen {{ $globals.external_http_port }} {{ $default_server }};
@@ -542,9 +562,9 @@ server {
         {{- end }}
     {{- end }}
     {{- if ne $https_method "nohttps" }}
-    listen {{ $globals.external_https_port }} ssl http2 {{ $default_server }};
+    listen {{ $globals.external_https_port }} ssl {{ $default_server }};
         {{- if $globals.enable_ipv6 }}
-    listen [::]:{{ $globals.external_https_port }} ssl http2 {{ $default_server }};
+    listen [::]:{{ $globals.external_https_port }} ssl {{ $default_server }};
         {{- end }}
 
         {{- if $cert_ok }}
